@@ -8,6 +8,14 @@ export default function Command() {
         onAction={() => launchCommand({ name: "projects", type: LaunchType.UserInitiated })}
       />
       <MenuBarExtra.Item
+        title="List Groups"
+        onAction={() => launchCommand({ name: "groups", type: LaunchType.UserInitiated })}
+      />
+      <MenuBarExtra.Item
+        title="List Applications"
+        onAction={() => launchCommand({ name: "applications", type: LaunchType.UserInitiated })}
+      />
+      <MenuBarExtra.Item
         title="Upload File"
         onAction={() => launchCommand({ name: "upload-file", type: LaunchType.UserInitiated })}
       />

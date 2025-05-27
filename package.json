@@ -6,6 +6,8 @@
   "icon": "logo.png",
   "author": "nazar_lysyi",
   "categories": [
+    "Developer Tools",
+    "Productivity",
     "Other"
   ],
   "license": "MIT",
@@ -24,6 +26,12 @@
       "mode": "view"
     },
     {
+      "name": "groups",
+      "title": "List Crowdin Groups",
+      "description": "List crowdin groups",
+      "mode": "view"
+    },
+    {
       "name": "upload-file",
       "title": "Add File to Crowdin",
       "description": "Upload a file to a Crowdin project",
@@ -33,6 +41,12 @@
       "name": "build-project-translation",
       "title": "Build Project Translation",
       "description": "Build translations for a Crowdin project",
+      "mode": "view"
+    },
+    {
+      "name": "applications",
+      "title": "List Crowdin Applications",
+      "description": "List installed Crowdin applications",
       "mode": "view"
     }
   ],
@@ -49,6 +63,7 @@
     "@types/react": "19.0.10",
     "eslint": "^9.22.0",
     "prettier": "^3.5.3",
+    "react-devtools": "^6.1.1",
     "typescript": "^5.8.2"
   },
   "scripts": {
