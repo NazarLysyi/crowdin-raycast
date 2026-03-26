@@ -42,8 +42,3 @@ export interface TranslationProgress {
     };
   }[];
 }
-
-export interface FormValues {
-  projectId: string;
-  file: string[];
-}
