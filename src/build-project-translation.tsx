@@ -1,132 +1,76 @@
 import { Action, ActionPanel, Form, showToast, Toast, open } from '@raycast/api';
-import { withAccessToken, getAccessToken } from '@raycast/utils';
-import crowdin from '@crowdin/crowdin-api-client';
-import jwt, { JwtPayload } from 'jsonwebtoken';
-import { useState, useEffect } from 'react';
+import { withAccessToken, FormValidation, useForm } from '@raycast/utils';
+
 import { oauth } from './services/crowdin';
-import { Project } from './types';
+import { useCrowdinClient } from './hooks/useCrowdinClient';
+import { useProjects } from './hooks/useProjects';
 
-function Command({ initialProjectId = '' }: { initialProjectId?: string }) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
+interface BuildFormValues {
+  projectId: string;
+}
 
-  const { token } = getAccessToken();
-  const { domain } = jwt.decode(token) as JwtPayload;
+export function BuildProjectTranslationCommand({ initialProjectId = '' }: { initialProjectId?: string }) {
+  const client = useCrowdinClient();
+  const { data: projects, isLoading } = useProjects();
 
-  const fetchProjects = async () => {
-    try {
-      const { projectsGroupsApi } = new crowdin({
-        token,
-        organization: domain,
-      });
-      const response = await projectsGroupsApi.withFetchAll().listProjects();
-      setProjects(response.data);
-    } catch (error) {
-      showToast({
-        style: Toast.Style.Failure,
-        title: 'Failed to fetch projects',
-        message: error instanceof Error ? error.message : 'Unknown error occurred',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { handleSubmit, itemProps } = useForm<BuildFormValues>({
+    async onSubmit(values) {
+      const toast = await showToast({ style: Toast.Style.Animated, title: 'Building translations...' });
+      try {
+        const projectId = parseInt(values.projectId);
+        const buildRes = await client.translationsApi.buildProject(projectId);
+        const buildId = buildRes.data.id;
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
+        const pollBuildStatus = async (): Promise<string> => {
+          const statusRes = await client.translationsApi.checkBuildStatus(projectId, buildId);
+          const status = statusRes.data.status;
+          const progress = statusRes.data.progress;
 
-  useEffect(() => {
-    if (
-      initialProjectId &&
-      projects.some((p) => p.data.id.toString() === initialProjectId)
-    ) {
-      setSelectedProjectId(initialProjectId);
-    }
-  }, [initialProjectId, projects]);
+          if (status === 'finished' || status === 'failed' || status === 'canceled') {
+            return status;
+          }
 
-  const handleBuild = async () => {
-    if (isLoading) {
-      showToast({
-        style: Toast.Style.Animated,
-        title: "Build in progress",
-        message: "Please wait for the current build to finish.",
-      });
-      return;
-    }
-    if (!selectedProjectId) {
-      showToast({
-        style: Toast.Style.Failure,
-        title: 'No project selected',
-        message: 'Please select a project to build.',
-      });
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const { translationsApi } = new crowdin({
-        token,
-        organization: domain,
-      });
+          toast.message = `Progress: ${progress}%`;
+          await new Promise((r) => setTimeout(r, 2000));
+          return pollBuildStatus();
+        };
 
-      const buildRes = await translationsApi.buildProject(parseInt(selectedProjectId));
-      const buildId = buildRes.data.id;
+        const finalStatus = await pollBuildStatus();
 
-      let status = buildRes.data.status;
-      while (status !== 'finished' && status !== 'failed' && status !== 'canceled') {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        const statusRes = await translationsApi.checkBuildStatus(parseInt(selectedProjectId), buildId);
-        status = statusRes.data.status;
+        if (finalStatus === 'finished') {
+          const downloadRes = await client.translationsApi.downloadTranslations(projectId, buildId);
+          toast.style = Toast.Style.Success;
+          toast.title = 'Build finished!';
+          toast.message = 'Opening download...';
+          await open(downloadRes.data.url);
+        } else {
+          toast.style = Toast.Style.Failure;
+          toast.title = `Build ${finalStatus}`;
+        }
+      } catch (error) {
+        toast.style = Toast.Style.Failure;
+        toast.title = 'Failed to build translations';
+        toast.message = error instanceof Error ? error.message : 'Unknown error';
       }
-
-      if (status === 'finished') {
-        const downloadRes = await translationsApi.downloadTranslations(parseInt(selectedProjectId), buildId);
-        showToast({
-          style: Toast.Style.Success,
-          title: 'Build finished!',
-          message: 'Download: ' + downloadRes.data.url,
-        });
-        open(downloadRes.data.url);
-      } else {
-        showToast({
-          style: Toast.Style.Failure,
-          title: 'Build failed or canceled',
-        });
-      }
-    } catch (error) {
-      showToast({
-        style: Toast.Style.Failure,
-        title: 'Failed to build/download',
-        message: error instanceof Error ? error.message : 'Unknown error occurred',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    initialValues: { projectId: initialProjectId },
+    validation: {
+      projectId: FormValidation.Required,
+    },
+  });
 
   return (
     <Form
       isLoading={isLoading}
       actions={
         <ActionPanel>
-          <Action.SubmitForm title='Build Translation' onSubmit={handleBuild} />
+          <Action.SubmitForm title="Build Translation" onSubmit={handleSubmit} />
         </ActionPanel>
       }
     >
-      <Form.Dropdown
-        id='projectId'
-        title='Project'
-        storeValue
-        value={
-          projects.some((p) => p.data.id.toString() === selectedProjectId)
-            ? selectedProjectId
-            : ''
-        }
-        onChange={setSelectedProjectId}
-      >
-        <Form.Dropdown.Item value='' title='Select project' />
-        {projects.map((project) => (
+      <Form.Dropdown {...itemProps.projectId} title="Project" storeValue>
+        <Form.Dropdown.Item value="" title="Select project" />
+        {(projects ?? []).map((project) => (
           <Form.Dropdown.Item
             key={project.data.id}
             value={project.data.id.toString()}
@@ -138,6 +82,4 @@ function Command({ initialProjectId = '' }: { initialProjectId?: string }) {
   );
 }
 
-const WrappedBuildProjectTranslationCommand = withAccessToken(oauth)(Command);
-export default WrappedBuildProjectTranslationCommand;
-export { WrappedBuildProjectTranslationCommand as BuildProjectTranslationCommand };
+export default withAccessToken(oauth)(BuildProjectTranslationCommand);

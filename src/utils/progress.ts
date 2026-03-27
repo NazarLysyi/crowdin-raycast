@@ -7,4 +7,4 @@ export function getSingleProgressBar(translated: number, approved: number, total
   const translatedBar = '🟦'.repeat(translatedBlocks);
   const emptyBar = '⬜️'.repeat(emptyBlocks);
   return approvedBar + translatedBar + emptyBar;
-} 
+}
